@@ -343,11 +343,8 @@ This repository is **fully safe to make public**:
 
 ## 👤 Author
 
-**[Your Name]** — Senior AI/ML Engineer · Riyadh, KSA
-- 🔗 [LinkedIn](https://linkedin.com/in/your-profile)
-- 🌐 [Portfolio](https://your-portfolio.com)
-- 📧 your.email@domain.com
+**Sami Saud** — ML Engineer 
+
 
 ---
 
-*Built as part of a KSA AI portfolio for Senior MLE / MLOps / DS roles — April 2026*
