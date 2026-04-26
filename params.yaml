@@ -1,0 +1,57 @@
+base:
+  random_seed: 42
+  project_name: ksa-fraud-detection
+  target_column: is_fraud
+
+data:
+  raw_path: data/raw/creditcard.csv
+  processed_train: data/processed/train.csv
+  processed_test: data/processed/test.csv
+  test_size: 0.2
+  stratify: true
+
+features:
+  scaling_method: standard          # standard | minmax | robust
+  handle_imbalance: true
+  imbalance_method: smote           # smote | undersample | class_weight
+  drop_columns:
+    - Time                          # drop raw timestamp
+
+model:
+  algorithm: xgboost               # xgboost | lightgbm | random_forest
+  hyperparams:
+    xgboost:
+      n_estimators: 300
+      max_depth: 6
+      learning_rate: 0.05
+      subsample: 0.8
+      colsample_bytree: 0.8
+      scale_pos_weight: 10          # handles class imbalance
+      eval_metric: aucpr
+      early_stopping_rounds: 20
+    lightgbm:
+      n_estimators: 300
+      num_leaves: 63
+      learning_rate: 0.05
+      subsample: 0.8
+      class_weight: balanced
+    random_forest:
+      n_estimators: 200
+      max_depth: 10
+      class_weight: balanced
+
+evaluation:
+  metrics:
+    - roc_auc
+    - average_precision
+    - f1
+    - precision
+    - recall
+  threshold: 0.5
+  shap_sample_size: 500             # rows to use for SHAP (speed)
+  drift_reference_size: 5000        # rows for Evidently baseline
+
+mlflow:
+  tracking_uri: https://dagshub.com/{DAGSHUB_USERNAME}/{DAGSHUB_REPO}.mlflow
+  experiment_name: fraud-detection-pipeline
+  model_registry_name: FraudDetector

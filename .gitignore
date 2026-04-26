@@ -1,0 +1,63 @@
+# ── Secrets (NEVER commit these) ─────────────────────────────────────────────
+.env
+*.env
+.env.*
+!.env.example
+*credentials*.json
+*service_account*.json
+/tmp/gdrive_creds.json
+
+# ── Data (versioned by DVC, not Git) ─────────────────────────────────────────
+data/raw/
+data/processed/
+# DVC cache and remote
+.dvc/cache/
+.dvc/tmp/
+
+# ── Model artefacts (versioned by DVC) ───────────────────────────────────────
+models/
+!models/.gitkeep
+
+# ── MLflow local runs (when not using DagsHub) ───────────────────────────────
+mlruns/
+mlartifacts/
+
+# ── Reports & figures (generated, not source) ────────────────────────────────
+reports/figures/
+reports/drift_report.html
+reports/metrics.json
+reports/train_metrics.json
+reports/data_stats.json
+reports/classification_report.txt
+reports/coverage.xml
+
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+.pytest_cache/
+.coverage
+htmlcov/
+.ruff_cache/
+
+# ── Jupyter ───────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ── Virtual environments ──────────────────────────────────────────────────────
+venv/
+.venv/
+env/
+ENV/
+
+# ── OS ───────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo

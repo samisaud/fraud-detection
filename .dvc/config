@@ -1,0 +1,7 @@
+[core]
+    remote = gdrive
+    autostage = true
+
+[remote "gdrive"]
+    url = gdrive://your_google_drive_folder_id_here
+    gdrive_use_service_account = true

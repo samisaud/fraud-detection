@@ -1,0 +1,89 @@
+stages:
+
+  prepare:
+    cmd: python src/data/prepare.py
+    deps:
+      - src/data/prepare.py
+      - data/raw/creditcard.csv
+    params:
+      - base.random_seed
+      - base.target_column
+      - data.test_size
+      - data.stratify
+      - data.drop_columns
+      - features.drop_columns
+    outs:
+      - data/processed/train.csv
+      - data/processed/test.csv
+    metrics:
+      - reports/data_stats.json:
+          cache: false
+
+  featurize:
+    cmd: python src/features/featurize.py
+    deps:
+      - src/features/featurize.py
+      - data/processed/train.csv
+      - data/processed/test.csv
+    params:
+      - features.scaling_method
+      - features.handle_imbalance
+      - features.imbalance_method
+      - base.random_seed
+      - base.target_column
+    outs:
+      - data/processed/train_features.csv
+      - data/processed/test_features.csv
+      - models/scaler.joblib
+
+  train:
+    cmd: python src/models/train.py
+    deps:
+      - src/models/train.py
+      - data/processed/train_features.csv
+    params:
+      - model
+      - base.random_seed
+      - base.target_column
+      - mlflow
+    outs:
+      - models/model.joblib
+    metrics:
+      - reports/train_metrics.json:
+          cache: false
+
+  evaluate:
+    cmd: python src/evaluation/evaluate.py
+    deps:
+      - src/evaluation/evaluate.py
+      - models/model.joblib
+      - models/scaler.joblib
+      - data/processed/test_features.csv
+    params:
+      - evaluation
+      - base.target_column
+      - mlflow
+    metrics:
+      - reports/metrics.json:
+          cache: false
+    plots:
+      - reports/figures/roc_curve.json:
+          cache: false
+      - reports/figures/pr_curve.json:
+          cache: false
+      - reports/figures/confusion_matrix.json:
+          cache: false
+
+  drift_report:
+    cmd: python src/evaluation/drift.py
+    deps:
+      - src/evaluation/drift.py
+      - data/processed/train_features.csv
+      - data/processed/test_features.csv
+      - models/model.joblib
+    params:
+      - evaluation.drift_reference_size
+      - base.target_column
+    outs:
+      - reports/drift_report.html:
+          cache: false
