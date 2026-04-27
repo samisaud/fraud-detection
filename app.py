@@ -125,7 +125,7 @@ with st.sidebar:
 
     st.divider()
     st.markdown("**Built by**")
-    st.markdown("Sami Saud · Senior AI/ML Engineer")
+    st.markdown("Sami Saud")
     st.markdown("[![GitHub](https://img.shields.io/badge/GitHub-samisaud-black?logo=github)](https://github.com/samisaud/fraud-detection)")
     st.divider()
 
@@ -165,7 +165,7 @@ with tab1:
     col1, col2, col3, col4, col5 = st.columns(5)
     metric_items = [
         (col1, "ROC-AUC", f"{metrics['roc_auc']:.4f}"),
-        (col2, "Avg Precision", f"{metrics.get('auprc', metrics.get('average_precision', 0)):.4f}"),
+        (col2, "Avg Precision", f"{metrics['average_precision']:.4f}"),
         (col3, "F1 Score", f"{metrics['f1']:.4f}"),
         (col4, "Precision", f"{metrics['precision']:.4f}"),
         (col5, "Recall", f"{metrics['recall']:.4f}"),
@@ -229,7 +229,7 @@ with tab1:
             fig = go.Figure()
             fig.add_trace(go.Scatter(
                 x=pr_data["recall"], y=pr_data["precision"],
-                mode="lines", name=f"AP = {metrics.get('auprc', metrics.get('average_precision', 0)):.4f}",
+                mode="lines", name=f"AP = {metrics['average_precision']:.4f}",
                 line=dict(color="#378ADD", width=2.5)
             ))
             fig.update_layout(
@@ -243,7 +243,7 @@ with tab1:
             precision = 0.9 * np.exp(-2 * recall) + 0.1
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=recall, y=precision, mode="lines",
-                name=f"AP ≈ {metrics.get('auprc', metrics.get('average_precision', 0)):.4f}",
+                name=f"AP ≈ {metrics['average_precision']:.4f}",
                 line=dict(color="#378ADD", width=2.5)))
             fig.update_layout(template="plotly_dark", height=350,
                 xaxis_title="Recall", yaxis_title="Precision",
@@ -270,40 +270,52 @@ with tab1:
 
 # ── Tab 2: Live Prediction ────────────────────────────────────────────────────
 with tab2:
-    st.markdown("### 🧪 Try a Live Prediction")
+    st.markdown("### 🧪 Live Fraud Detection — Try It Yourself")
     st.markdown(
-        "Adjust the sliders below to simulate a transaction. "
-        "The model returns a fraud probability in real time."
+        "Pick a real customer transaction. The model decides in milliseconds whether it's fraud. "
+        "Then we reveal what actually happened."
     )
 
     col_left, col_right = st.columns([1, 1])
 
     with col_left:
-        st.markdown("**Pick a real transaction from the test set**")
-        st.caption(
-            "These are 12 actual transactions from the held-out test set — "
-            "6 legitimate, 6 fraudulent — that the model has never seen during training. "
-            "The 'true label' below is from the dataset; the prediction is what the model says. "
-            "This proves the model is real, not hardcoded."
+        st.markdown("### 🏦 Test the model on real customer transactions")
+        st.markdown(
+            "**Click any transaction below.** The model has never seen these — "
+            "they're held out from training. Watch it make a real-time decision."
         )
 
         try:
             samples_df = pd.read_csv("data/samples.csv")
+
+            # Reverse-engineer approximate transaction amounts from log1p value
+            samples_df["display_amount"] = (np.exp(samples_df.get("Amount_log1p", 0)) - 1).round(2)
+
             sample_options = []
             for i, row in samples_df.iterrows():
-                label = "🚨 Actually fraud" if row["Class"] == 1 else "✅ Actually legit"
-                sample_options.append(f"Transaction #{i+1} — {label} (Amount feature: {row.get('Amount_log1p', 0):.2f})")
+                emoji = "🚨" if row["Class"] == 1 else "💳"
+                amt = max(row["display_amount"], 0.50)
+                sample_options.append(f"{emoji}  Transaction #{i+1}  —  ${amt:,.2f}")
 
-            selected = st.radio("Pick a transaction:", sample_options, index=0)
+            selected = st.radio(
+                "**Customer transactions** (label hidden until prediction):",
+                sample_options,
+                index=0,
+                label_visibility="visible"
+            )
             sample_idx = sample_options.index(selected)
             sample_row = samples_df.iloc[sample_idx]
             true_label = int(sample_row["Class"])
 
-            st.info(f"**True label from dataset:** {'🚨 FRAUD' if true_label == 1 else '✅ LEGITIMATE'}")
-            st.caption("The model has never seen this row during training. Below is its prediction:")
+            # Don't reveal the true label upfront — make it suspenseful
+            with st.container():
+                st.markdown(f"**Selected:** Transaction #{sample_idx+1}")
+                amt = max(sample_row.get("display_amount", 0), 0.50)
+                st.markdown(f"**Amount:** ${amt:,.2f}")
+                st.caption("Bank's actual classification will be revealed after the model decides →")
 
-            # Build feature dict from the actual row
-            feature_dict = {col: float(sample_row[col]) for col in samples_df.columns if col != "Class"}
+            feature_dict = {col: float(sample_row[col]) for col in samples_df.columns
+                            if col not in ("Class", "display_amount")}
             use_real_row = True
         except Exception as e:
             st.error(f"Could not load samples.csv: {e}")
@@ -374,18 +386,31 @@ with tab2:
 
         st.markdown("---")
         if true_label is not None:
-            if (is_fraud and true_label == 1) or (not is_fraud and true_label == 0):
-                st.success("✅ **Model prediction matches the true label.**")
-            else:
-                st.warning("⚠️ Model prediction differs from true label — every model has some errors. The headline AUPRC measures this rate.")
+            actual = "🚨 FRAUD" if true_label == 1 else "💳 LEGITIMATE"
+            predicted = "🚨 FRAUD" if is_fraud else "💳 LEGITIMATE"
+            correct = (is_fraud and true_label == 1) or (not is_fraud and true_label == 0)
 
-        with st.expander("🔧 Show raw feature values for this transaction"):
+            col_a, col_b = st.columns(2)
+            with col_a:
+                st.metric("Model said", predicted)
+            with col_b:
+                st.metric("Bank's actual record", actual)
+
+            if correct:
+                st.success("✅ **Correct decision.** The model would have prevented this from being miscategorised in production.")
+            else:
+                st.warning("⚠️ **Incorrect.** No model is perfect — this is why we report AUPRC, precision and recall metrics on the **Performance** tab.")
+
+        with st.expander("👨‍💻 Technical view — show raw model features"):
             display_df = pd.DataFrame({
                 "Feature": list(feature_dict.keys())[:15],
                 "Value": [round(v, 4) for v in list(feature_dict.values())[:15]]
             })
             st.dataframe(display_df, hide_index=True, use_container_width=True)
-            st.caption(f"+ {len(feature_dict) - 15} more features. All come from the real test set CSV.")
+            st.caption(
+                f"Showing 15 of {len(feature_dict)} features. V1–V28 are PCA-anonymised by the bank "
+                "for privacy. The model uses all of them, not just Amount."
+            )
 
 
 # ── Tab 3: Architecture ───────────────────────────────────────────────────────
