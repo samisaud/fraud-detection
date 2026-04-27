@@ -125,7 +125,7 @@ with st.sidebar:
 
     st.divider()
     st.markdown("**Built by**")
-    st.markdown("Sami Saud")
+    st.markdown("Sami Saud · Senior AI/ML Engineer")
     st.markdown("[![GitHub](https://img.shields.io/badge/GitHub-samisaud-black?logo=github)](https://github.com/samisaud/fraud-detection)")
     st.divider()
 
@@ -165,7 +165,7 @@ with tab1:
     col1, col2, col3, col4, col5 = st.columns(5)
     metric_items = [
         (col1, "ROC-AUC", f"{metrics['roc_auc']:.4f}"),
-        (col2, "Avg Precision", f"{metrics.get('auprc', 0):.4f}"),
+        (col2, "Avg Precision", f"{metrics['average_precision']:.4f}"),
         (col3, "F1 Score", f"{metrics['f1']:.4f}"),
         (col4, "Precision", f"{metrics['precision']:.4f}"),
         (col5, "Recall", f"{metrics['recall']:.4f}"),
@@ -229,7 +229,7 @@ with tab1:
             fig = go.Figure()
             fig.add_trace(go.Scatter(
                 x=pr_data["recall"], y=pr_data["precision"],
-                mode="lines", name=f"AP = {metrics.get('auprc', 0):.4f}",
+                mode="lines", name=f"AP = {metrics['average_precision']:.4f}",
                 line=dict(color="#378ADD", width=2.5)
             ))
             fig.update_layout(
@@ -243,7 +243,7 @@ with tab1:
             precision = 0.9 * np.exp(-2 * recall) + 0.1
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=recall, y=precision, mode="lines",
-                name=f"AP ≈ {metrics.get('auprc', 0):.4f}",
+                name=f"AP ≈ {metrics['average_precision']:.4f}",
                 line=dict(color="#378ADD", width=2.5)))
             fig.update_layout(template="plotly_dark", height=350,
                 xaxis_title="Recall", yaxis_title="Precision",
@@ -279,62 +279,44 @@ with tab2:
     col_left, col_right = st.columns([1, 1])
 
     with col_left:
-        st.markdown("**Pick a transaction scenario**")
+        st.markdown("**Pick a real transaction from the test set**")
         st.caption(
-            "Note: this dataset uses PCA-anonymised features (banks never share raw "
-            "transaction data publicly). The presets below simulate realistic transaction "
-            "patterns from the actual test set."
+            "These are 12 actual transactions from the held-out test set — "
+            "6 legitimate, 6 fraudulent — that the model has never seen during training. "
+            "The 'true label' below is from the dataset; the prediction is what the model says. "
+            "This proves the model is real, not hardcoded."
         )
 
-        scenario = st.radio(
-            "Scenario:",
-            [
-                "💳 Normal grocery purchase ($45)",
-                "💼 Business expense ($1,200)",
-                "🏧 Late-night ATM withdrawal ($800)",
-                "🛒 Online shopping ($199)",
-                "🚨 Suspicious foreign transaction ($2,400)",
-                "⚠️  Card-testing micro-charge ($1.50)",
-            ],
-            index=0,
-        )
+        try:
+            samples_df = pd.read_csv("data/samples.csv")
+            sample_options = []
+            for i, row in samples_df.iterrows():
+                label = "🚨 Actually fraud" if row["Class"] == 1 else "✅ Actually legit"
+                sample_options.append(f"Transaction #{i+1} — {label} (Amount feature: {row.get('Amount_log1p', 0):.2f})")
 
-        # Realistic feature combinations from actual fraud/legit patterns
-        # Lower V14 + V17 = stronger fraud signal in this dataset
-        scenarios = {
-            "💳 Normal grocery purchase ($45)":          {"amount": 45.0,   "v14": 0.5,  "v17": 0.3,  "v10": 0.1,  "v12": 0.2,  "v1": -0.5, "v2": 0.4,  "v3": 1.2,  "v4": 0.1},
-            "💼 Business expense ($1,200)":              {"amount": 1200.0, "v14": 0.8,  "v17": 0.6,  "v10": 0.3,  "v12": 0.5,  "v1": 0.2,  "v2": -0.1, "v3": 0.8,  "v4": 0.3},
-            "🏧 Late-night ATM withdrawal ($800)":       {"amount": 800.0,  "v14": -1.5, "v17": -1.2, "v10": -1.0, "v12": -0.8, "v1": -1.5, "v2": 1.5,  "v3": -0.5, "v4": 1.0},
-            "🛒 Online shopping ($199)":                 {"amount": 199.0,  "v14": 0.2,  "v17": 0.0,  "v10": 0.1,  "v12": -0.2, "v1": -0.8, "v2": 0.6,  "v3": 1.0,  "v4": 0.4},
-            "🚨 Suspicious foreign transaction ($2,400)":{"amount": 2400.0, "v14": -7.5, "v17": -6.8, "v10": -5.5, "v12": -4.2, "v1": -3.5, "v2": 3.2,  "v3": -2.8, "v4": 2.5},
-            "⚠️  Card-testing micro-charge ($1.50)":     {"amount": 1.50,   "v14": -4.5, "v17": -3.8, "v10": -3.0, "v12": -2.5, "v1": -2.5, "v2": 2.5,  "v3": -1.5, "v4": 1.8},
-        }
-        s = scenarios[scenario]
-        amount = s["amount"]
-        v1, v2, v3, v4 = s["v1"], s["v2"], s["v3"], s["v4"]
-        v10, v12, v14, v17 = s["v10"], s["v12"], s["v14"], s["v17"]
+            selected = st.radio("Pick a transaction:", sample_options, index=0)
+            sample_idx = sample_options.index(selected)
+            sample_row = samples_df.iloc[sample_idx]
+            true_label = int(sample_row["Class"])
 
-        with st.expander("🔧 Advanced — fine-tune features manually"):
-            amount = st.slider("Amount (USD)", 0.0, 5000.0, amount, step=0.5)
-            v14 = st.slider("V14 (strongest fraud signal in SHAP)", -10.0, 5.0, v14, step=0.1,
-                            help="Lower values strongly indicate fraud")
-            v17 = st.slider("V17 (2nd strongest fraud signal)", -10.0, 5.0, v17, step=0.1,
-                            help="Lower values indicate fraud")
-            v10 = st.slider("V10", -10.0, 5.0, v10, step=0.1)
-            v12 = st.slider("V12", -10.0, 5.0, v12, step=0.1)
+            st.info(f"**True label from dataset:** {'🚨 FRAUD' if true_label == 1 else '✅ LEGITIMATE'}")
+            st.caption("The model has never seen this row during training. Below is its prediction:")
+
+            # Build feature dict from the actual row
+            feature_dict = {col: float(sample_row[col]) for col in samples_df.columns if col != "Class"}
+            use_real_row = True
+        except Exception as e:
+            st.error(f"Could not load samples.csv: {e}")
+            feature_dict = {f"V{i}": 0.0 for i in range(1, 29)}
+            feature_dict["Amount"] = 100.0
+            true_label = None
+            use_real_row = False
 
     with col_right:
-        st.markdown("**Prediction**")
+        st.markdown("**Model Prediction**")
 
-        # Build feature vector (remaining V features set to 0 for demo)
-        feature_dict = {f"V{i}": 0.0 for i in range(1, 29)}
-        feature_dict.update({
-            "V1": v1, "V2": v2, "V3": v3, "V4": v4,
-            "V10": v10, "V12": v12, "V14": v14, "V17": v17,
-            "Amount": amount,
-        })
+        # Use the real test row directly — already has all features including interactions
         input_df = pd.DataFrame([feature_dict])
-        input_df = add_interaction_features(input_df)
 
         if model_loaded:
             try:
@@ -391,15 +373,19 @@ with tab2:
             )
 
         st.markdown("---")
-        st.markdown("**Input summary**")
-        st.dataframe(
-            pd.DataFrame({"Feature": ["Amount", "V1", "V2", "V14", "V17"],
-                          "Value": [amount, v1, v2, v14, v17]}),
-            hide_index=True, use_container_width=True
-        )
+        if true_label is not None:
+            if (is_fraud and true_label == 1) or (not is_fraud and true_label == 0):
+                st.success("✅ **Model prediction matches the true label.**")
+            else:
+                st.warning("⚠️ Model prediction differs from true label — every model has some errors. The headline AUPRC measures this rate.")
 
-        if not model_loaded:
-            st.caption("⚠️ Demo mode — run `dvc repro` to use your trained model.")
+        with st.expander("🔧 Show raw feature values for this transaction"):
+            display_df = pd.DataFrame({
+                "Feature": list(feature_dict.keys())[:15],
+                "Value": [round(v, 4) for v in list(feature_dict.values())[:15]]
+            })
+            st.dataframe(display_df, hide_index=True, use_container_width=True)
+            st.caption(f"+ {len(feature_dict) - 15} more features. All come from the real test set CSV.")
 
 
 # ── Tab 3: Architecture ───────────────────────────────────────────────────────
