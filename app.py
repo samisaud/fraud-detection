@@ -165,7 +165,7 @@ with tab1:
     col1, col2, col3, col4, col5 = st.columns(5)
     metric_items = [
         (col1, "ROC-AUC", f"{metrics['roc_auc']:.4f}"),
-        (col2, "Avg Precision", f"{metrics['average_precision']:.4f}"),
+        (col2, "Avg Precision", f"{metrics.get('auprc', metrics.get('average_precision', 0)):.4f}"),
         (col3, "F1 Score", f"{metrics['f1']:.4f}"),
         (col4, "Precision", f"{metrics['precision']:.4f}"),
         (col5, "Recall", f"{metrics['recall']:.4f}"),
@@ -229,7 +229,7 @@ with tab1:
             fig = go.Figure()
             fig.add_trace(go.Scatter(
                 x=pr_data["recall"], y=pr_data["precision"],
-                mode="lines", name=f"AP = {metrics['average_precision']:.4f}",
+                mode="lines", name=f"AP = {metrics.get('auprc', metrics.get('average_precision', 0)):.4f}",
                 line=dict(color="#378ADD", width=2.5)
             ))
             fig.update_layout(
@@ -243,7 +243,7 @@ with tab1:
             precision = 0.9 * np.exp(-2 * recall) + 0.1
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=recall, y=precision, mode="lines",
-                name=f"AP ≈ {metrics['average_precision']:.4f}",
+                name=f"AP ≈ {metrics.get('auprc', metrics.get('average_precision', 0)):.4f}",
                 line=dict(color="#378ADD", width=2.5)))
             fig.update_layout(template="plotly_dark", height=350,
                 xaxis_title="Recall", yaxis_title="Precision",
