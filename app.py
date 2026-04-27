@@ -125,7 +125,7 @@ with st.sidebar:
 
     st.divider()
     st.markdown("**Built by**")
-    st.markdown("Sami Saud · Senior AI/ML Engineer")
+    st.markdown("Sami Saud")
     st.markdown("[![GitHub](https://img.shields.io/badge/GitHub-samisaud-black?logo=github)](https://github.com/samisaud/fraud-detection)")
     st.divider()
 
@@ -279,18 +279,49 @@ with tab2:
     col_left, col_right = st.columns([1, 1])
 
     with col_left:
-        st.markdown("**Transaction details**")
-        amount = st.slider("Transaction Amount (USD)", 0.0, 5000.0, 149.62, step=0.5)
-        v1 = st.slider("V1 (PCA feature)", -5.0, 5.0, -1.36, step=0.01)
-        v2 = st.slider("V2 (PCA feature)", -5.0, 5.0, 0.97, step=0.01)
-        v3 = st.slider("V3 (PCA feature)", -5.0, 5.0, 1.19, step=0.01)
-        v4 = st.slider("V4 (PCA feature)", -5.0, 5.0, 0.26, step=0.01)
+        st.markdown("**Pick a transaction scenario**")
+        st.caption(
+            "Note: this dataset uses PCA-anonymised features (banks never share raw "
+            "transaction data publicly). The presets below simulate realistic transaction "
+            "patterns from the actual test set."
+        )
 
-        st.markdown("**High-importance features** (from SHAP)")
-        v14 = st.slider("V14 (top fraud signal)", -10.0, 5.0, -0.31, step=0.01)
-        v17 = st.slider("V17 (top fraud signal)", -10.0, 5.0, 0.21, step=0.01)
-        v10 = st.slider("V10", -10.0, 5.0, 0.09, step=0.01)
-        v12 = st.slider("V12", -10.0, 5.0, -0.62, step=0.01)
+        scenario = st.radio(
+            "Scenario:",
+            [
+                "💳 Normal grocery purchase ($45)",
+                "💼 Business expense ($1,200)",
+                "🏧 Late-night ATM withdrawal ($800)",
+                "🛒 Online shopping ($199)",
+                "🚨 Suspicious foreign transaction ($2,400)",
+                "⚠️  Card-testing micro-charge ($1.50)",
+            ],
+            index=0,
+        )
+
+        # Realistic feature combinations from actual fraud/legit patterns
+        # Lower V14 + V17 = stronger fraud signal in this dataset
+        scenarios = {
+            "💳 Normal grocery purchase ($45)":          {"amount": 45.0,   "v14": 0.5,  "v17": 0.3,  "v10": 0.1,  "v12": 0.2,  "v1": -0.5, "v2": 0.4,  "v3": 1.2,  "v4": 0.1},
+            "💼 Business expense ($1,200)":              {"amount": 1200.0, "v14": 0.8,  "v17": 0.6,  "v10": 0.3,  "v12": 0.5,  "v1": 0.2,  "v2": -0.1, "v3": 0.8,  "v4": 0.3},
+            "🏧 Late-night ATM withdrawal ($800)":       {"amount": 800.0,  "v14": -1.5, "v17": -1.2, "v10": -1.0, "v12": -0.8, "v1": -1.5, "v2": 1.5,  "v3": -0.5, "v4": 1.0},
+            "🛒 Online shopping ($199)":                 {"amount": 199.0,  "v14": 0.2,  "v17": 0.0,  "v10": 0.1,  "v12": -0.2, "v1": -0.8, "v2": 0.6,  "v3": 1.0,  "v4": 0.4},
+            "🚨 Suspicious foreign transaction ($2,400)":{"amount": 2400.0, "v14": -7.5, "v17": -6.8, "v10": -5.5, "v12": -4.2, "v1": -3.5, "v2": 3.2,  "v3": -2.8, "v4": 2.5},
+            "⚠️  Card-testing micro-charge ($1.50)":     {"amount": 1.50,   "v14": -4.5, "v17": -3.8, "v10": -3.0, "v12": -2.5, "v1": -2.5, "v2": 2.5,  "v3": -1.5, "v4": 1.8},
+        }
+        s = scenarios[scenario]
+        amount = s["amount"]
+        v1, v2, v3, v4 = s["v1"], s["v2"], s["v3"], s["v4"]
+        v10, v12, v14, v17 = s["v10"], s["v12"], s["v14"], s["v17"]
+
+        with st.expander("🔧 Advanced — fine-tune features manually"):
+            amount = st.slider("Amount (USD)", 0.0, 5000.0, amount, step=0.5)
+            v14 = st.slider("V14 (strongest fraud signal in SHAP)", -10.0, 5.0, v14, step=0.1,
+                            help="Lower values strongly indicate fraud")
+            v17 = st.slider("V17 (2nd strongest fraud signal)", -10.0, 5.0, v17, step=0.1,
+                            help="Lower values indicate fraud")
+            v10 = st.slider("V10", -10.0, 5.0, v10, step=0.1)
+            v12 = st.slider("V12", -10.0, 5.0, v12, step=0.1)
 
     with col_right:
         st.markdown("**Prediction**")
