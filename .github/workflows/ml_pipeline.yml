@@ -89,10 +89,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: test
     # Only run on push to main, scheduled runs, or manual dispatch
-    if: |
-      (github.ref == 'refs/heads/main' && github.event_name == 'push') ||
-      github.event_name == 'schedule' ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.run_full_pipeline == 'true')
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_full_pipeline == 'true'
 
     env:
       # DagsHub MLflow credentials — set these as GitHub Secrets
@@ -190,7 +187,7 @@ jobs:
     name: Build & Push Docker Image
     runs-on: ubuntu-latest
     needs: pipeline
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_full_pipeline == 'true'
     permissions:
       contents: read
       packages: write
