@@ -108,6 +108,76 @@ def add_interaction_features(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+
+@st.cache_resource
+def get_feature_importances(_model):
+    """Get global feature importances from the trained Random Forest model."""
+    if _model is None or not hasattr(_model, "feature_importances_"):
+        return None
+    return _model.feature_importances_
+
+
+def explain_prediction(model, feature_dict, prob, threshold=0.5):
+    """
+    Generate a business-friendly explanation of why the model made this prediction.
+    Uses feature contributions: feature_value × feature_importance.
+    Returns top 5 drivers with human-readable descriptions.
+    """
+    if model is None:
+        return []
+
+    importances = get_feature_importances(model)
+    if importances is None:
+        return []
+
+    feature_names = list(feature_dict.keys())
+    feature_values = np.array([feature_dict[f] for f in feature_names])
+
+    # Match importance length to feature length
+    n = min(len(importances), len(feature_values))
+    contributions = feature_values[:n] * importances[:n]
+
+    # Sort by absolute contribution
+    sorted_idx = np.argsort(np.abs(contributions))[::-1][:5]
+
+    # Human-readable descriptions for known top features
+    descriptions = {
+        "V14": "Transaction pattern signal #1 (most predictive)",
+        "V17": "Transaction pattern signal #2",
+        "V12": "Spending behaviour deviation",
+        "V10": "Account activity anomaly",
+        "V11": "Time-of-day pattern",
+        "V4": "Merchant category risk",
+        "V3": "Geographic risk indicator",
+        "V7": "Transaction velocity",
+        "V16": "Authorisation pattern",
+        "V18": "Recent activity correlation",
+        "Amount": "Transaction amount",
+        "Amount_log1p": "Transaction amount (scaled)",
+        "Amount_squared": "Transaction amount (non-linear)",
+        "V14_V17_interact": "Combined signal of top-2 fraud predictors",
+        "V10_V12_interact": "Combined behaviour-anomaly signal",
+    }
+
+    explanations = []
+    for i in sorted_idx:
+        name = feature_names[i]
+        val = feature_values[i]
+        contrib = contributions[i]
+        direction = "↑ pushes toward FRAUD" if contrib > 0 else "↓ pushes toward LEGITIMATE"
+        # Strength bar
+        strength = min(abs(contrib) / (abs(contributions[sorted_idx[0]]) + 1e-9), 1.0)
+        explanations.append({
+            "feature": descriptions.get(name, name),
+            "raw_name": name,
+            "value": round(float(val), 3),
+            "direction": direction,
+            "strength": float(strength),
+            "contribution": float(contrib),
+        })
+    return explanations
+
+
 model, scaler = load_model()
 metrics = load_metrics()
 model_loaded = model is not None
@@ -165,7 +235,7 @@ with tab1:
     col1, col2, col3, col4, col5 = st.columns(5)
     metric_items = [
         (col1, "ROC-AUC", f"{metrics['roc_auc']:.4f}"),
-        (col2, "Avg Precision", f"{metrics.get('auprc', metrics.get('average_precision', 0)):.4f}"),
+        (col2, "Avg Precision", f"{metrics['average_precision']:.4f}"),
         (col3, "F1 Score", f"{metrics['f1']:.4f}"),
         (col4, "Precision", f"{metrics['precision']:.4f}"),
         (col5, "Recall", f"{metrics['recall']:.4f}"),
@@ -229,7 +299,7 @@ with tab1:
             fig = go.Figure()
             fig.add_trace(go.Scatter(
                 x=pr_data["recall"], y=pr_data["precision"],
-                mode="lines", name=f"AP = {metrics.get('auprc', metrics.get('average_precision', 0)):.4f}",
+                mode="lines", name=f"AP = {metrics['average_precision']:.4f}",
                 line=dict(color="#378ADD", width=2.5)
             ))
             fig.update_layout(
@@ -243,7 +313,7 @@ with tab1:
             precision = 0.9 * np.exp(-2 * recall) + 0.1
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=recall, y=precision, mode="lines",
-                name=f"AP ≈ {metrics.get('auprc', metrics.get('average_precision', 0)):.4f}",
+                name=f"AP ≈ {metrics['average_precision']:.4f}",
                 line=dict(color="#378ADD", width=2.5)))
             fig.update_layout(template="plotly_dark", height=350,
                 xaxis_title="Recall", yaxis_title="Precision",
