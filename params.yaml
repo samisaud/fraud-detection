@@ -1,6 +1,6 @@
 base:
   random_seed: 42
-  project_name: ksa-fraud-detection
+  project_name: fraud-detection-mlops
   target_column: is_fraud
 
 data:

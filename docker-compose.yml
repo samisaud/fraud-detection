@@ -1,0 +1,48 @@
+version: "3.9"
+
+services:
+  fraud-api:
+    image: ghcr.io/samisaud/fraud-detection:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./models:/app/models:ro
+      - ./reports:/app/reports:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+    # Memory limits — XGBoost/RF can spike during inference
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: "1.0"
+        reservations:
+          memory: 512m
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Optional: run Streamlit alongside API
+  fraud-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.streamlit
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./models:/app/models:ro
+      - ./reports:/app/reports:ro
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "0.5"
+    depends_on:
+      - fraud-api
+    restart: unless-stopped

@@ -1,6 +1,6 @@
-# 🔍 KSA Fraud Detection — End-to-End ML Pipeline
+# 🔍 Fraud Detection — End-to-End ML Pipeline
 
-[![CI/CD Pipeline](https://github.com/YOUR_USERNAME/ksa-fraud-detection/actions/workflows/ml_pipeline.yml/badge.svg)](https://github.com/YOUR_USERNAME/ksa-fraud-detection/actions/workflows/ml_pipeline.yml)
+[![CI/CD Pipeline](https://github.com/YOUR_USERNAME/fraud-detection/actions/workflows/ml_pipeline.yml/badge.svg)](https://github.com/YOUR_USERNAME/fraud-detection/actions/workflows/ml_pipeline.yml)
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/release/python-311/)
 [![DVC](https://img.shields.io/badge/data--version--control-DVC-945DD6)](https://dvc.org)
 [![MLflow](https://img.shields.io/badge/experiment--tracking-MLflow%20%7C%20DagsHub-0194E2)](https://dagshub.com)
@@ -11,8 +11,6 @@ A **production-grade, end-to-end ML pipeline** for credit card fraud detection, 
 DVC for data + model versioning, MLflow on DagsHub for experiment tracking, GitHub Actions for CI/CD,
 Evidently AI for drift monitoring, and a FastAPI inference server — **all completely free to run**.
 
-> **Domain context**: Fraud detection is a top priority for Saudi fintech firms and Vision 2030 digital
-> finance initiatives. This pipeline mirrors the MLOps architecture used in production at Tier-1 KSA financial institutions.
 
 ---
 
@@ -56,7 +54,7 @@ Evidently AI for drift monitoring, and a FastAPI inference server — **all comp
 ## 🗂️ Project Structure
 
 ```
-ksa-fraud-detection/
+fraud-detection/
 ├── .github/
 │   └── workflows/
 │       └── ml_pipeline.yml      # CI/CD: lint → test → train → docker
@@ -138,8 +136,8 @@ Visualise DAG: `dvc dag`
 ### 1. Clone & install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/ksa-fraud-detection.git
-cd ksa-fraud-detection
+git clone https://github.com/YOUR_USERNAME/fraud-detection.git
+cd fraud-detection
 
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
@@ -196,7 +194,7 @@ xdg-open reports/drift_report.html  # Linux
 4. Add to `.env`:
    ```
    DAGSHUB_USERNAME=your_username
-   DAGSHUB_REPO=ksa-fraud-detection
+   DAGSHUB_REPO=fraud-detection
    DAGSHUB_TOKEN=your_token
    ```
 
@@ -268,8 +266,8 @@ curl -X POST http://localhost:8000/predict \
 
 **Docker:**
 ```bash
-docker build -t ksa-fraud-api .
-docker run -p 8000:8000 -v $(pwd)/models:/app/models ksa-fraud-api
+docker build -t fraud-detection-api .
+docker run -p 8000:8000 -v $(pwd)/models:/app/models fraud-detection-api
 ```
 
 ---
@@ -318,18 +316,6 @@ DVC will only re-run `train` and `evaluate` — `prepare` and `featurize` are ca
 
 ---
 
-## 🛡️ Public Safety
-
-This repository is **fully safe to make public**:
-
-- ✅ No API keys or tokens in code — all via `.env` (gitignored)
-- ✅ `.env.example` committed with placeholder values only
-- ✅ Dataset not committed — only a download link in this README
-- ✅ Model artefacts in `.gitignore` — versioned by DVC separately
-- ✅ All data is public domain (Kaggle, CC0 licence)
-- ✅ MIT licence on all code
-
----
 
 ## 📚 References
 
@@ -343,8 +329,8 @@ This repository is **fully safe to make public**:
 
 ## 👤 Author
 
-**Sami Saud** — ML Engineer 
-
+**Sami Saud** — ML Engineer
 
 ---
 
+*Built as an open-source MLOps portfolio project — April 2026*

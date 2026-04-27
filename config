@@ -1,0 +1,10 @@
+[core]
+    remote = dagshub
+    autostage = true
+
+[remote "dagshub"]
+    url = s3://dvc
+    endpointurl = https://dagshub.com/samisaud/fraud-detection.s3
+
+[remote "dagshub"].access_key_id = ${DAGSHUB_TOKEN}
+[remote "dagshub"].secret_access_key = ${DAGSHUB_TOKEN}

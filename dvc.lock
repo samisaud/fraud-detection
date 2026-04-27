@@ -1,0 +1,207 @@
+schema: '2.0'
+stages:
+  prepare:
+    cmd: /Users/sami/Downloads/ksa-ml-pipeline/.venv/bin/python3 
+      src/data/prepare.py
+    deps:
+    - path: data/raw/creditcard.csv
+      hash: md5
+      md5: e90efcb83d69faf99fcab8b0255024de
+      size: 150828752
+    - path: src/data/prepare.py
+      hash: md5
+      md5: 72c1c63608ad8722231eea80c61e172d
+      size: 3447
+    params:
+      params.yaml:
+        base.random_seed: 42
+        base.target_column: Class
+        data.stratify: true
+        data.test_size: 0.2
+        features.drop_columns:
+        - Time
+    outs:
+    - path: data/processed/test.csv
+      hash: md5
+      md5: 9ea9129d464904b836bd7899e1935fe8
+      size: 29682284
+    - path: data/processed/train.csv
+      hash: md5
+      md5: e920e653e6e509c77909312c713d8f90
+      size: 118734788
+    - path: reports/data_stats.json
+      hash: md5
+      md5: 2036e744cdf00efb65a582b67f90e2d2
+      size: 147
+  featurize:
+    cmd: /Users/sami/Downloads/ksa-ml-pipeline/.venv/bin/python3 
+      src/features/featurize.py
+    deps:
+    - path: data/processed/test.csv
+      hash: md5
+      md5: 9ea9129d464904b836bd7899e1935fe8
+      size: 29682284
+    - path: data/processed/train.csv
+      hash: md5
+      md5: e920e653e6e509c77909312c713d8f90
+      size: 118734788
+    - path: src/features/featurize.py
+      hash: md5
+      md5: 36e8584606d16eb8b918254b7a7a5dc3
+      size: 3929
+    params:
+      params.yaml:
+        base.random_seed: 42
+        base.target_column: Class
+        features.handle_imbalance: true
+        features.imbalance_method: smote
+        features.scaling_method: standard
+    outs:
+    - path: data/processed/test_features.csv
+      hash: md5
+      md5: 684939f4e0705c28d68145c871a18079
+      size: 37514979
+    - path: data/processed/train_features.csv
+      hash: md5
+      md5: 893bd20cb271a1847c6e81b2db205e5c
+      size: 296122980
+    - path: models/scaler.joblib
+      hash: md5
+      md5: 6ae8b359036987ceb48d837ad727e5d1
+      size: 1887
+  train:
+    cmd: /Users/sami/Downloads/ksa-ml-pipeline/.venv/bin/python3 
+      src/models/train.py
+    deps:
+    - path: data/processed/train_features.csv
+      hash: md5
+      md5: 893bd20cb271a1847c6e81b2db205e5c
+      size: 296122980
+    - path: src/models/train.py
+      hash: md5
+      md5: 1f427ea98652835234b9d35996700922
+      size: 1905
+    params:
+      params.yaml:
+        base.random_seed: 42
+        base.target_column: Class
+        mlflow:
+          tracking_uri: 
+            https://dagshub.com/{DAGSHUB_USERNAME}/{DAGSHUB_REPO}.mlflow
+          experiment_name: fraud-detection-pipeline
+          model_registry_name: FraudDetector
+        model:
+          algorithm: random_forest
+          hyperparams:
+            xgboost:
+              n_estimators: 300
+              max_depth: 6
+              learning_rate: 0.05
+              subsample: 0.8
+              colsample_bytree: 0.8
+              scale_pos_weight: 10
+              eval_metric: aucpr
+              early_stopping_rounds: 20
+            lightgbm:
+              n_estimators: 300
+              num_leaves: 63
+              learning_rate: 0.05
+              subsample: 0.8
+              class_weight: balanced
+            random_forest:
+              n_estimators: 200
+              max_depth: 10
+              class_weight: balanced
+    outs:
+    - path: models/model.joblib
+      hash: md5
+      md5: 8d6b82f736a74cca2e3affa0a6e7e7d6
+      size: 7624025
+    - path: reports/train_metrics.json
+      hash: md5
+      md5: 64a456347ee6daa862b742ea4b7a47cc
+      size: 180
+  evaluate:
+    cmd: /Users/sami/Downloads/ksa-ml-pipeline/.venv/bin/python3 
+      src/evaluation/evaluate.py
+    deps:
+    - path: data/processed/test_features.csv
+      hash: md5
+      md5: 684939f4e0705c28d68145c871a18079
+      size: 37514979
+    - path: models/model.joblib
+      hash: md5
+      md5: 8d6b82f736a74cca2e3affa0a6e7e7d6
+      size: 7624025
+    - path: models/scaler.joblib
+      hash: md5
+      md5: 6ae8b359036987ceb48d837ad727e5d1
+      size: 1887
+    - path: src/evaluation/evaluate.py
+      hash: md5
+      md5: 182ae4092621ad3a306f7e1b368a653d
+      size: 7946
+    params:
+      params.yaml:
+        base.target_column: Class
+        evaluation:
+          metrics:
+          - roc_auc
+          - average_precision
+          - f1
+          - precision
+          - recall
+          threshold: 0.5
+          shap_sample_size: 500
+          drift_reference_size: 5000
+        mlflow:
+          tracking_uri: 
+            https://dagshub.com/{DAGSHUB_USERNAME}/{DAGSHUB_REPO}.mlflow
+          experiment_name: fraud-detection-pipeline
+          model_registry_name: FraudDetector
+    outs:
+    - path: reports/figures/confusion_matrix.json
+      hash: md5
+      md5: a0ae71346b77b86993ff797d52602465
+      size: 44
+    - path: reports/figures/pr_curve.json
+      hash: md5
+      md5: 43a8b73f858c8e350b9a7d88fa1a9174
+      size: 3291418
+    - path: reports/figures/roc_curve.json
+      hash: md5
+      md5: 1c41e8bed438adfe50e5f9b79d8b2494
+      size: 88730
+    - path: reports/metrics.json
+      hash: md5
+      md5: 29ee0dd23587ace7fb44bf49cb08a8da
+      size: 334
+  drift_report:
+    cmd: /Users/sami/Downloads/ksa-ml-pipeline/.venv/bin/python3 
+      src/evaluation/drift.py
+    deps:
+    - path: data/processed/test_features.csv
+      hash: md5
+      md5: 684939f4e0705c28d68145c871a18079
+      size: 37514979
+    - path: data/processed/train_features.csv
+      hash: md5
+      md5: 893bd20cb271a1847c6e81b2db205e5c
+      size: 296122980
+    - path: models/model.joblib
+      hash: md5
+      md5: 8d6b82f736a74cca2e3affa0a6e7e7d6
+      size: 7624025
+    - path: src/evaluation/drift.py
+      hash: md5
+      md5: 07d13f103e716481908e3ffddf060bff
+      size: 1772
+    params:
+      params.yaml:
+        base.target_column: Class
+        evaluation.drift_reference_size: 5000
+    outs:
+    - path: reports/drift_report.html
+      hash: md5
+      md5: 0465021a4a1127f07fb414cd4c7df377
+      size: 100

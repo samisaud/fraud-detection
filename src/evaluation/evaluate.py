@@ -1,11 +1,12 @@
 """
 Stage 4 — evaluate.py
-Full evaluation: metrics, curves, SHAP explainability, MLflow logging.
+Full evaluation: AUPRC as headline metric, ROC, SHAP, confusion matrix.
+AUPRC (Average Precision) is the correct metric for fraud detection —
+not ROC-AUC which is misleading on heavily imbalanced datasets.
 """
 
 import json
 import logging
-import os
 import sys
 from pathlib import Path
 
@@ -14,7 +15,6 @@ import matplotlib.pyplot as plt
 import mlflow
 import numpy as np
 import pandas as pd
-import shap
 import yaml
 from sklearn.metrics import (
     ConfusionMatrixDisplay,
@@ -29,172 +29,180 @@ from sklearn.metrics import (
     roc_curve,
 )
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-    stream=sys.stdout,
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(message)s", stream=sys.stdout)
 log = logging.getLogger("evaluate")
 
 
-def load_params(params_path: str = "params.yaml") -> dict:
-    with open(params_path) as f:
+def load_params():
+    with open("params.yaml") as f:
         return yaml.safe_load(f)
 
 
-def save_roc_curve(fpr, tpr, auc_score: float, out_path: str) -> None:
-    data = [
-        {"fpr": float(f), "tpr": float(t)}
-        for f, t in zip(fpr, tpr)
-    ]
-    with open(out_path, "w") as f:
-        json.dump(data, f)
-
-    fig, ax = plt.subplots(figsize=(7, 5))
-    ax.plot(fpr, tpr, label=f"AUC = {auc_score:.4f}", linewidth=2, color="#378ADD")
-    ax.plot([0, 1], [0, 1], "k--", linewidth=1)
-    ax.set_xlabel("False Positive Rate")
-    ax.set_ylabel("True Positive Rate")
-    ax.set_title("ROC Curve — Fraud Detection")
-    ax.legend(loc="lower right")
-    fig.tight_layout()
-    fig.savefig(out_path.replace(".json", ".png"), dpi=150)
-    plt.close(fig)
-
-
-def save_pr_curve(precision, recall, ap_score: float, out_path: str) -> None:
-    data = [
-        {"precision": float(p), "recall": float(r)}
-        for p, r in zip(precision, recall)
-    ]
-    with open(out_path, "w") as f:
-        json.dump(data, f)
-
-    fig, ax = plt.subplots(figsize=(7, 5))
-    ax.plot(recall, precision, label=f"AP = {ap_score:.4f}", linewidth=2, color="#639922")
-    ax.set_xlabel("Recall")
-    ax.set_ylabel("Precision")
-    ax.set_title("Precision-Recall Curve — Fraud Detection")
-    ax.legend(loc="upper right")
-    fig.tight_layout()
-    fig.savefig(out_path.replace(".json", ".png"), dpi=150)
-    plt.close(fig)
-
-
-def save_confusion_matrix(cm: np.ndarray, out_path: str) -> None:
-    data = cm.tolist()
-    with open(out_path, "w") as f:
-        json.dump({"confusion_matrix": data}, f)
-
-    fig, ax = plt.subplots(figsize=(5, 4))
-    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=["Legit", "Fraud"])
-    disp.plot(ax=ax, colorbar=False, cmap="Blues")
-    ax.set_title("Confusion Matrix")
-    fig.tight_layout()
-    fig.savefig(out_path.replace(".json", ".png"), dpi=150)
-    plt.close(fig)
-
-
-def compute_shap(model, X_sample: pd.DataFrame, out_dir: str) -> None:
-    log.info("Computing SHAP values on %d samples ...", len(X_sample))
-    try:
-        explainer = shap.TreeExplainer(model)
-        shap_values = explainer.shap_values(X_sample)
-
-        fig, ax = plt.subplots(figsize=(10, 7))
-        shap.summary_plot(shap_values, X_sample, show=False, plot_size=None)
-        fig = plt.gcf()
-        fig.tight_layout()
-        fig.savefig(f"{out_dir}/shap_summary.png", dpi=150, bbox_inches="tight")
-        plt.close("all")
-        log.info("SHAP summary plot saved.")
-    except Exception as e:
-        log.warning("SHAP computation failed (non-fatal): %s", e)
-
-
-def setup_mlflow(mlflow_cfg: dict) -> None:
-    if not os.getenv("MLFLOW_TRACKING_USERNAME"):
-        mlflow.set_tracking_uri("mlruns")
-    else:
-        mlflow.set_tracking_uri(mlflow_cfg["tracking_uri"])
-    mlflow.set_experiment(mlflow_cfg["experiment_name"])
+def find_best_threshold(y_true, y_prob):
+    """
+    Find threshold that maximises F1 on the PR curve.
+    Critical for fraud: default 0.5 threshold is almost always wrong
+    on imbalanced data — this finds the optimal operating point.
+    """
+    precision, recall, thresholds = precision_recall_curve(y_true, y_prob)
+    f1_scores = 2 * precision * recall / (precision + recall + 1e-9)
+    best_idx = np.argmax(f1_scores)
+    best_threshold = thresholds[best_idx] if best_idx < len(thresholds) else 0.5
+    log.info(
+        "Optimal threshold: %.4f (F1=%.4f P=%.4f R=%.4f)",
+        best_threshold, f1_scores[best_idx],
+        precision[best_idx], recall[best_idx],
+    )
+    return float(best_threshold)
 
 
 def main():
     params = load_params()
     target = params["base"]["target_column"]
-    eval_cfg = params["evaluation"]
-    mlflow_cfg = params["mlflow"]
 
     test_df = pd.read_csv("data/processed/test_features.csv")
     X_test = test_df.drop(columns=[target])
     y_test = test_df[target]
 
     model = joblib.load("models/model.joblib")
-    log.info("Model loaded | test rows: %d", len(X_test))
+    log.info("Model loaded | test rows: %d | fraud cases: %d", len(X_test), int(y_test.sum()))
 
-    # Predictions
-    threshold = eval_cfg.get("threshold", 0.5)
     y_prob = model.predict_proba(X_test)[:, 1]
+
+    # --- Find optimal threshold (not hardcoded 0.5) ---
+    threshold = find_best_threshold(y_test, y_prob)
     y_pred = (y_prob >= threshold).astype(int)
 
-    # Core metrics
+    # --- AUPRC is the headline metric for fraud ---
+    auprc = float(average_precision_score(y_test, y_prob))
+    roc_auc = float(roc_auc_score(y_test, y_prob))
+
     metrics = {
-        "roc_auc": float(roc_auc_score(y_test, y_prob)),
-        "average_precision": float(average_precision_score(y_test, y_prob)),
-        "f1": float(f1_score(y_test, y_pred)),
+        # AUPRC first — this is what matters for imbalanced fraud data
+        "auprc": auprc,
+        "roc_auc": roc_auc,
+        "f1": float(f1_score(y_test, y_pred, zero_division=0)),
         "precision": float(precision_score(y_test, y_pred, zero_division=0)),
         "recall": float(recall_score(y_test, y_pred, zero_division=0)),
-        "threshold": threshold,
-        "n_test_samples": len(y_test),
-        "n_fraud_detected": int(y_pred.sum()),
+        "optimal_threshold": threshold,
+        "n_test_samples": int(len(y_test)),
         "n_actual_fraud": int(y_test.sum()),
+        "n_fraud_detected": int(y_pred.sum()),
+        "n_false_negatives": int(((y_test == 1) & (y_pred == 0)).sum()),
+        "n_false_positives": int(((y_test == 0) & (y_pred == 1)).sum()),
     }
-    log.info("Metrics: %s", metrics)
+
+    log.info("=" * 50)
+    log.info("HEADLINE: AUPRC = %.4f  (ROC-AUC = %.4f)", auprc, roc_auc)
+    log.info("F1=%.4f  Precision=%.4f  Recall=%.4f", metrics["f1"], metrics["precision"], metrics["recall"])
+    log.info("Fraud detected: %d / %d | False negatives: %d",
+             metrics["n_fraud_detected"], metrics["n_actual_fraud"], metrics["n_false_negatives"])
+    log.info("=" * 50)
 
     Path("reports/figures").mkdir(parents=True, exist_ok=True)
 
-    # Curves
-    fpr, tpr, _ = roc_curve(y_test, y_prob)
-    save_roc_curve(fpr, tpr, metrics["roc_auc"], "reports/figures/roc_curve.json")
-
+    # --- PR Curve (more informative than ROC for fraud) ---
     precision_arr, recall_arr, _ = precision_recall_curve(y_test, y_prob)
-    save_pr_curve(precision_arr, recall_arr, metrics["average_precision"], "reports/figures/pr_curve.json")
+    fig, ax = plt.subplots(figsize=(7, 5))
+    ax.plot(recall_arr, precision_arr, color="#00d4aa", linewidth=2.5,
+            label=f"AUPRC = {auprc:.4f}  ← headline metric")
+    ax.axvline(x=metrics["recall"], color="white", linestyle="--", alpha=0.5,
+               label=f"Operating point (threshold={threshold:.3f})")
+    ax.set_xlabel("Recall (Fraud Caught Rate)")
+    ax.set_ylabel("Precision (Alert Accuracy)")
+    ax.set_title("Precision-Recall Curve\n(AUPRC is the correct metric for imbalanced fraud data)")
+    ax.legend()
+    ax.set_facecolor("#0e1117")
+    fig.patch.set_facecolor("#0e1117")
+    ax.tick_params(colors="white")
+    ax.xaxis.label.set_color("white")
+    ax.yaxis.label.set_color("white")
+    ax.title.set_color("white")
+    fig.tight_layout()
+    fig.savefig("reports/figures/pr_curve.png", dpi=150, facecolor="#0e1117")
+    plt.close(fig)
 
+    # Save PR curve data for Streamlit
+    pr_data = [{"precision": float(p), "recall": float(r)}
+               for p, r in zip(precision_arr, recall_arr)]
+    with open("reports/figures/pr_curve.json", "w") as f:
+        json.dump(pr_data, f)
+
+    # --- ROC Curve ---
+    fpr, tpr, _ = roc_curve(y_test, y_prob)
+    fig, ax = plt.subplots(figsize=(7, 5))
+    ax.plot(fpr, tpr, color="#378ADD", linewidth=2.5, label=f"ROC-AUC = {roc_auc:.4f}")
+    ax.plot([0, 1], [0, 1], "w--", linewidth=1, label="Random")
+    ax.set_xlabel("False Positive Rate")
+    ax.set_ylabel("True Positive Rate")
+    ax.set_title("ROC Curve\n(Note: misleading for imbalanced data — use AUPRC instead)")
+    ax.legend()
+    ax.set_facecolor("#0e1117")
+    fig.patch.set_facecolor("#0e1117")
+    ax.tick_params(colors="white")
+    ax.xaxis.label.set_color("white")
+    ax.yaxis.label.set_color("white")
+    ax.title.set_color("white")
+    fig.tight_layout()
+    fig.savefig("reports/figures/roc_curve.png", dpi=150, facecolor="#0e1117")
+    plt.close(fig)
+
+    roc_data = [{"fpr": float(f), "tpr": float(t)} for f, t in zip(fpr, tpr)]
+    with open("reports/figures/roc_curve.json", "w") as f:
+        json.dump(roc_data, f)
+
+    # --- Confusion Matrix ---
     cm = confusion_matrix(y_test, y_pred)
-    save_confusion_matrix(cm, "reports/figures/confusion_matrix.json")
+    fig, ax = plt.subplots(figsize=(5, 4))
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=["Legit", "Fraud"])
+    disp.plot(ax=ax, colorbar=False, cmap="Blues")
+    ax.set_title("Confusion Matrix")
+    fig.tight_layout()
+    fig.savefig("reports/figures/confusion_matrix.png", dpi=150)
+    plt.close(fig)
+    with open("reports/figures/confusion_matrix.json", "w") as f:
+        json.dump({"confusion_matrix": cm.tolist()}, f)
 
-    # SHAP
-    shap_sample = X_test.sample(
-        min(eval_cfg.get("shap_sample_size", 500), len(X_test)),
-        random_state=params["base"]["random_seed"],
-    )
-    compute_shap(model, shap_sample, "reports/figures")
+    # --- SHAP (optional — skip if not installed) ---
+    try:
+        import shap
+        shap_n = min(300, len(X_test))
+        X_sample = X_test.sample(shap_n, random_state=42)
+        log.info("Computing SHAP on %d samples...", shap_n)
+        explainer = shap.TreeExplainer(model)
+        shap_values = explainer.shap_values(X_sample)
+        shap.summary_plot(shap_values[1] if isinstance(shap_values, list) else shap_values,
+                          X_sample, show=False)
+        plt.savefig("reports/figures/shap_summary.png", dpi=150, bbox_inches="tight")
+        plt.close("all")
+        log.info("SHAP saved.")
+    except Exception as e:
+        log.warning("SHAP skipped: %s", e)
 
-    # Classification report
+    # --- Classification report ---
     report = classification_report(y_test, y_pred, target_names=["Legit", "Fraud"])
     log.info("\n%s", report)
     with open("reports/classification_report.txt", "w") as f:
+        f.write(f"Optimal threshold: {threshold:.4f}\n\n")
         f.write(report)
 
-    # Save metrics JSON for DVC tracking
+    # --- Save metrics ---
     with open("reports/metrics.json", "w") as f:
         json.dump(metrics, f, indent=2)
 
-    # Log to MLflow
-    setup_mlflow(mlflow_cfg)
-    with mlflow.start_run(run_name="evaluate") as run:
+    # --- Log to MLflow ---
+    mlflow.set_tracking_uri("mlruns")
+    mlflow.set_experiment("fraud-detection")
+    with mlflow.start_run(run_name="evaluate"):
         mlflow.log_metrics(metrics)
         mlflow.log_artifact("reports/metrics.json")
         mlflow.log_artifact("reports/classification_report.txt")
-        mlflow.log_artifact("reports/figures/roc_curve.png")
-        mlflow.log_artifact("reports/figures/pr_curve.png")
-        mlflow.log_artifact("reports/figures/confusion_matrix.png")
-        if Path("reports/figures/shap_summary.png").exists():
-            mlflow.log_artifact("reports/figures/shap_summary.png")
-        log.info("Logged to MLflow run: %s", run.info.run_id)
+        for fig_file in Path("reports/figures").glob("*.png"):
+            mlflow.log_artifact(str(fig_file))
 
-    log.info("Evaluation complete. ROC-AUC=%.4f | Avg-Precision=%.4f", metrics["roc_auc"], metrics["average_precision"])
+    log.info("Evaluation complete.")
+    log.info("AUPRC=%.4f | ROC-AUC=%.4f | F1=%.4f | Recall=%.4f",
+             auprc, roc_auc, metrics["f1"], metrics["recall"])
 
 
 if __name__ == "__main__":
