@@ -235,7 +235,7 @@ with tab1:
     col1, col2, col3, col4, col5 = st.columns(5)
     metric_items = [
         (col1, "ROC-AUC", f"{metrics['roc_auc']:.4f}"),
-        (col2, "Avg Precision", f"{metrics.get('auprc', metrics.get('average_precision', 0)):.4f}"),
+        (col2, "Avg Precision", f"{metrics['average_precision']:.4f}"),
         (col3, "F1 Score", f"{metrics['f1']:.4f}"),
         (col4, "Precision", f"{metrics['precision']:.4f}"),
         (col5, "Recall", f"{metrics['recall']:.4f}"),
@@ -299,7 +299,7 @@ with tab1:
             fig = go.Figure()
             fig.add_trace(go.Scatter(
                 x=pr_data["recall"], y=pr_data["precision"],
-                mode="lines", name=f"AP = {metrics.get('auprc', metrics.get('average_precision', 0)):.4f}",
+                mode="lines", name=f"AP = {metrics['average_precision']:.4f}",
                 line=dict(color="#378ADD", width=2.5)
             ))
             fig.update_layout(
@@ -313,7 +313,7 @@ with tab1:
             precision = 0.9 * np.exp(-2 * recall) + 0.1
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=recall, y=precision, mode="lines",
-                name=f"AP ≈ {metrics.get('auprc', metrics.get('average_precision', 0)):.4f}",
+                name=f"AP ≈ {metrics['average_precision']:.4f}",
                 line=dict(color="#378ADD", width=2.5)))
             fig.update_layout(template="plotly_dark", height=350,
                 xaxis_title="Recall", yaxis_title="Precision",
@@ -361,28 +361,27 @@ with tab2:
             # Reverse-engineer approximate transaction amounts from log1p value
             samples_df["display_amount"] = (np.exp(samples_df.get("Amount_log1p", 0)) - 1).round(2)
 
-            sample_options = []
-            for i, row in samples_df.iterrows():
-                emoji = "🚨" if row["Class"] == 1 else "💳"
-                amt = max(row["display_amount"], 0.50)
-                sample_options.append(f"{emoji}  Transaction #{i+1}  —  ${amt:,.2f}")
+            # Hide labels and amounts — pure mystery transactions
+            sample_options = [f"Transaction #{i+1}" for i in range(len(samples_df))]
 
             selected = st.radio(
-                "**Customer transactions** (label hidden until prediction):",
+                "**Pick a transaction** (true label hidden — let the model decide first):",
                 sample_options,
                 index=0,
-                label_visibility="visible"
+                horizontal=True,
             )
             sample_idx = sample_options.index(selected)
             sample_row = samples_df.iloc[sample_idx]
             true_label = int(sample_row["Class"])
 
-            # Don't reveal the true label upfront — make it suspenseful
             with st.container():
                 st.markdown(f"**Selected:** Transaction #{sample_idx+1}")
-                amt = max(sample_row.get("display_amount", 0), 0.50)
-                st.markdown(f"**Amount:** ${amt:,.2f}")
-                st.caption("Bank's actual classification will be revealed after the model decides →")
+                st.caption(
+                    "ℹ️ Note: dollar amounts are intentionally hidden because this dataset "
+                    "uses anonymised features (banks never publish raw transaction data). "
+                    "The model uses 28 anonymised features + Amount to decide. "
+                    "**Watch the prediction — then we reveal what really happened.** →"
+                )
 
             feature_dict = {col: float(sample_row[col]) for col in samples_df.columns
                             if col not in ("Class", "display_amount")}
