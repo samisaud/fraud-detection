@@ -50,8 +50,10 @@ def find_best_threshold(y_true, y_prob):
     best_threshold = thresholds[best_idx] if best_idx < len(thresholds) else 0.5
     log.info(
         "Optimal threshold: %.4f (F1=%.4f P=%.4f R=%.4f)",
-        best_threshold, f1_scores[best_idx],
-        precision[best_idx], recall[best_idx],
+        best_threshold,
+        f1_scores[best_idx],
+        precision[best_idx],
+        recall[best_idx],
     )
     return float(best_threshold)
 
@@ -94,9 +96,18 @@ def main():
 
     log.info("=" * 50)
     log.info("HEADLINE: AUPRC = %.4f  (ROC-AUC = %.4f)", auprc, roc_auc)
-    log.info("F1=%.4f  Precision=%.4f  Recall=%.4f", metrics["f1"], metrics["precision"], metrics["recall"])
-    log.info("Fraud detected: %d / %d | False negatives: %d",
-             metrics["n_fraud_detected"], metrics["n_actual_fraud"], metrics["n_false_negatives"])
+    log.info(
+        "F1=%.4f  Precision=%.4f  Recall=%.4f",
+        metrics["f1"],
+        metrics["precision"],
+        metrics["recall"],
+    )
+    log.info(
+        "Fraud detected: %d / %d | False negatives: %d",
+        metrics["n_fraud_detected"],
+        metrics["n_actual_fraud"],
+        metrics["n_false_negatives"],
+    )
     log.info("=" * 50)
 
     Path("reports/figures").mkdir(parents=True, exist_ok=True)
@@ -104,10 +115,20 @@ def main():
     # --- PR Curve (more informative than ROC for fraud) ---
     precision_arr, recall_arr, _ = precision_recall_curve(y_test, y_prob)
     fig, ax = plt.subplots(figsize=(7, 5))
-    ax.plot(recall_arr, precision_arr, color="#00d4aa", linewidth=2.5,
-            label=f"AUPRC = {auprc:.4f}  ← headline metric")
-    ax.axvline(x=metrics["recall"], color="white", linestyle="--", alpha=0.5,
-               label=f"Operating point (threshold={threshold:.3f})")
+    ax.plot(
+        recall_arr,
+        precision_arr,
+        color="#00d4aa",
+        linewidth=2.5,
+        label=f"AUPRC = {auprc:.4f}  ← headline metric",
+    )
+    ax.axvline(
+        x=metrics["recall"],
+        color="white",
+        linestyle="--",
+        alpha=0.5,
+        label=f"Operating point (threshold={threshold:.3f})",
+    )
     ax.set_xlabel("Recall (Fraud Caught Rate)")
     ax.set_ylabel("Precision (Alert Accuracy)")
     ax.set_title("Precision-Recall Curve\n(AUPRC is the correct metric for imbalanced fraud data)")
@@ -123,8 +144,10 @@ def main():
     plt.close(fig)
 
     # Save PR curve data for Streamlit
-    pr_data = [{"precision": float(p), "recall": float(r)}
-               for p, r in zip(precision_arr, recall_arr, strict=False)]
+    pr_data = [
+        {"precision": float(p), "recall": float(r)}
+        for p, r in zip(precision_arr, recall_arr, strict=False)
+    ]
     with open("reports/figures/pr_curve.json", "w") as f:
         json.dump(pr_data, f)
 
@@ -166,13 +189,15 @@ def main():
     # --- SHAP (optional — skip if not installed) ---
     try:
         import shap
+
         shap_n = min(300, len(X_test))
         X_sample = X_test.sample(shap_n, random_state=42)
         log.info("Computing SHAP on %d samples...", shap_n)
         explainer = shap.TreeExplainer(model)
         shap_values = explainer.shap_values(X_sample)
-        shap.summary_plot(shap_values[1] if isinstance(shap_values, list) else shap_values,
-                          X_sample, show=False)
+        shap.summary_plot(
+            shap_values[1] if isinstance(shap_values, list) else shap_values, X_sample, show=False
+        )
         plt.savefig("reports/figures/shap_summary.png", dpi=150, bbox_inches="tight")
         plt.close("all")
         log.info("SHAP saved.")
@@ -201,8 +226,13 @@ def main():
             mlflow.log_artifact(str(fig_file))
 
     log.info("Evaluation complete.")
-    log.info("AUPRC=%.4f | ROC-AUC=%.4f | F1=%.4f | Recall=%.4f",
-             auprc, roc_auc, metrics["f1"], metrics["recall"])
+    log.info(
+        "AUPRC=%.4f | ROC-AUC=%.4f | F1=%.4f | Recall=%.4f",
+        auprc,
+        roc_auc,
+        metrics["f1"],
+        metrics["recall"],
+    )
 
 
 if __name__ == "__main__":

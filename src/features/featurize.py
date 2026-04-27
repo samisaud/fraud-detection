@@ -75,12 +75,8 @@ def main():
     scaler_cls = SCALERS.get(feat["scaling_method"], StandardScaler)
     scaler = scaler_cls()
     log.info("Fitting %s scaler on train ...", feat["scaling_method"])
-    X_train_scaled = pd.DataFrame(
-        scaler.fit_transform(X_train), columns=X_train.columns
-    )
-    X_test_scaled = pd.DataFrame(
-        scaler.transform(X_test), columns=X_test.columns
-    )
+    X_train_scaled = pd.DataFrame(scaler.fit_transform(X_train), columns=X_train.columns)
+    X_test_scaled = pd.DataFrame(scaler.transform(X_test), columns=X_test.columns)
 
     # Handle class imbalance
     if feat.get("handle_imbalance"):

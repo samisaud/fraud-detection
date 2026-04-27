@@ -4,11 +4,8 @@ Unit and integration tests for the full ML pipeline.
 Run: pytest tests/ -v --cov=src --cov-report=term-missing
 """
 
-import json
-import os
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pandas as pd
@@ -20,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 # ─── Fixtures ──────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def synthetic_fraud_df():
@@ -63,24 +61,32 @@ def sample_params():
             },
         },
         "evaluation": {"threshold": 0.5, "shap_sample_size": 50, "drift_reference_size": 100},
-        "mlflow": {"tracking_uri": "mlruns", "experiment_name": "test-exp", "model_registry_name": "TestModel"},
+        "mlflow": {
+            "tracking_uri": "mlruns",
+            "experiment_name": "test-exp",
+            "model_registry_name": "TestModel",
+        },
     }
 
 
 # ─── Data tests ────────────────────────────────────────────────────────────────
 
+
 class TestDataPreparation:
     def test_schema_validation_passes(self, synthetic_fraud_df):
         from src.data.prepare import validate_schema
+
         validate_schema(synthetic_fraud_df, "is_fraud")  # should not raise
 
     def test_schema_validation_missing_target(self, synthetic_fraud_df):
         from src.data.prepare import validate_schema
+
         with pytest.raises(AssertionError):
             validate_schema(synthetic_fraud_df.drop(columns=["is_fraud"]), "is_fraud")
 
     def test_compute_stats(self, synthetic_fraud_df):
         from src.data.prepare import compute_stats
+
         stats = compute_stats(synthetic_fraud_df, "is_fraud")
         assert "n_rows" in stats
         assert "positive_rate" in stats
@@ -89,20 +95,21 @@ class TestDataPreparation:
 
     def test_train_test_split_stratified(self, synthetic_fraud_df):
         from sklearn.model_selection import train_test_split
+
         X = synthetic_fraud_df.drop(columns=["is_fraud"])
         y = synthetic_fraud_df["is_fraud"]
-        _, _, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, random_state=42, stratify=y
-        )
+        _, _, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
         # Fraud rate should be similar in both splits
         assert abs(y_train.mean() - y_test.mean()) < 0.01
 
 
 # ─── Feature tests ─────────────────────────────────────────────────────────────
 
+
 class TestFeaturization:
     def test_interaction_features_added(self, synthetic_fraud_df):
         from src.features.featurize import add_interaction_features
+
         df = add_interaction_features(synthetic_fraud_df)
         assert "Amount_log1p" in df.columns
         assert "Amount_squared" in df.columns
@@ -110,16 +117,19 @@ class TestFeaturization:
 
     def test_amount_log1p_non_negative(self, synthetic_fraud_df):
         from src.features.featurize import add_interaction_features
+
         df = add_interaction_features(synthetic_fraud_df)
         assert (df["Amount_log1p"] >= 0).all()
 
     def test_no_nulls_after_featurization(self, synthetic_fraud_df):
         from src.features.featurize import add_interaction_features
+
         df = add_interaction_features(synthetic_fraud_df)
         assert df.isnull().sum().sum() == 0
 
     def test_scaler_fit_transform(self, synthetic_fraud_df):
         from sklearn.preprocessing import StandardScaler
+
         feature_cols = [c for c in synthetic_fraud_df.columns if c != "is_fraud"]
         X = synthetic_fraud_df[feature_cols]
         scaler = StandardScaler()
@@ -131,9 +141,11 @@ class TestFeaturization:
 
 # ─── Model tests ───────────────────────────────────────────────────────────────
 
+
 class TestModel:
     def test_model_builds_correctly(self, sample_params):
         from src.models.train import build_model
+
         model = build_model(sample_params)
         assert model is not None
         assert hasattr(model, "fit")
@@ -141,6 +153,7 @@ class TestModel:
 
     def test_model_trains_and_predicts(self, synthetic_fraud_df, sample_params):
         from sklearn.preprocessing import StandardScaler
+
         from src.models.train import build_model
 
         X = synthetic_fraud_df.drop(columns=["is_fraud"])
@@ -158,12 +171,17 @@ class TestModel:
 
     def test_unknown_algorithm_raises(self, sample_params):
         from src.models.train import build_model
-        bad_params = {**sample_params, "model": {**sample_params["model"], "algorithm": "unknown_algo"}}
+
+        bad_params = {
+            **sample_params,
+            "model": {**sample_params["model"], "algorithm": "unknown_algo"},
+        }
         with pytest.raises(ValueError, match="Unknown algorithm"):
             build_model(bad_params)
 
 
 # ─── Evaluation tests ──────────────────────────────────────────────────────────
+
 
 class TestEvaluation:
     def test_metrics_computed(self, synthetic_fraud_df):
@@ -203,10 +221,13 @@ class TestEvaluation:
 
 # ─── API tests ─────────────────────────────────────────────────────────────────
 
+
 class TestAPI:
     def test_health_endpoint(self):
         from fastapi.testclient import TestClient
+
         from src.serve import app
+
         client = TestClient(app)
         response = client.get("/health")
         assert response.status_code == 200
@@ -217,11 +238,14 @@ class TestAPI:
     def test_predict_endpoint_no_model(self):
         """When model is not loaded, should return 503."""
         import src.serve as serve_module
+
         original = serve_module.model
         serve_module.model = None
 
         from fastapi.testclient import TestClient
+
         from src.serve import app
+
         client = TestClient(app)
 
         payload = {f"V{i}": 0.0 for i in range(1, 29)}
