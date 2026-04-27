@@ -1,0 +1,13 @@
+{
+  "auprc": 0.8199751551036132,
+  "roc_auc": 0.9844875133508665,
+  "f1": 0.8333333333333334,
+  "precision": 0.9146341463414634,
+  "recall": 0.7653061224489796,
+  "optimal_threshold": 0.9393501121541802,
+  "n_test_samples": 56962,
+  "n_actual_fraud": 98,
+  "n_fraud_detected": 82,
+  "n_false_negatives": 23,
+  "n_false_positives": 7
+}
