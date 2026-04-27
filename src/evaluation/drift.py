@@ -9,7 +9,7 @@ import yaml
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(message)s", stream=sys.stdout)
 log = logging.getLogger("drift")
 
-params = yaml.safe_load(open("params.yaml"))
+params = yaml.safe_load(open("params.yaml", encoding="utf-8"))  # noqa: SIM115
 target = params["base"]["target_column"]
 
 train_df = pd.read_csv("data/processed/train_features.csv")
@@ -26,9 +26,9 @@ current["prediction"] = model.predict_proba(current[feature_cols])[:, 1]
 Path("reports").mkdir(exist_ok=True)
 
 try:
-    from evidently.report import Report
     from evidently.metric_preset import DataDriftPreset, DataQualityPreset
     from evidently.pipeline.column_mapping import ColumnMapping
+    from evidently.report import Report
 
     col_map = ColumnMapping(
         target=target,

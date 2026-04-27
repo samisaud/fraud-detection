@@ -6,7 +6,6 @@ Docs: http://localhost:8000/docs
 
 import logging
 from pathlib import Path
-from typing import List
 
 import joblib
 import numpy as np
@@ -18,12 +17,11 @@ log = logging.getLogger("serve")
 logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(
-    title="KSA Fraud Detection API",
-    description="ML model serving — end-to-end pipeline demo",
+    title="Fraud Detection API",
+    description="End-to-end ML pipeline demo",
     version="1.0.0",
 )
 
-# Load model and scaler at startup
 MODEL_PATH = Path("models/model.joblib")
 SCALER_PATH = Path("models/scaler.joblib")
 
@@ -37,25 +35,42 @@ def load_artefacts():
     if MODEL_PATH.exists():
         model = joblib.load(MODEL_PATH)
         log.info("Model loaded from %s", MODEL_PATH)
-    else:
-        log.warning("Model not found at %s — run the DVC pipeline first", MODEL_PATH)
     if SCALER_PATH.exists():
         scaler = joblib.load(SCALER_PATH)
         log.info("Scaler loaded from %s", SCALER_PATH)
 
 
 class TransactionFeatures(BaseModel):
-    """
-    Input features — matches the credit card fraud dataset schema.
-    V1–V28 are PCA-anonymised features. Amount is the transaction value.
-    """
-    V1: float; V2: float; V3: float; V4: float
-    V5: float; V6: float; V7: float; V8: float
-    V9: float; V10: float; V11: float; V12: float
-    V13: float; V14: float; V15: float; V16: float
-    V17: float; V18: float; V19: float; V20: float
-    V21: float; V22: float; V23: float; V24: float
-    V25: float; V26: float; V27: float; V28: float
+    """Input features — V1-V28 are PCA-anonymised. Amount is transaction value."""
+
+    V1: float
+    V2: float
+    V3: float
+    V4: float
+    V5: float
+    V6: float
+    V7: float
+    V8: float
+    V9: float
+    V10: float
+    V11: float
+    V12: float
+    V13: float
+    V14: float
+    V15: float
+    V16: float
+    V17: float
+    V18: float
+    V19: float
+    V20: float
+    V21: float
+    V22: float
+    V23: float
+    V24: float
+    V25: float
+    V26: float
+    V27: float
+    V28: float
     Amount: float = Field(..., ge=0, description="Transaction amount in USD")
 
 
@@ -67,7 +82,7 @@ class PredictionResponse(BaseModel):
 
 
 class BatchPredictionRequest(BaseModel):
-    transactions: List[TransactionFeatures]
+    transactions: list[TransactionFeatures]
 
 
 @app.get("/health")
@@ -87,7 +102,6 @@ def predict(transaction: TransactionFeatures):
     threshold = 0.5
     df = pd.DataFrame([transaction.model_dump()])
 
-    # Add interaction features (must mirror featurize.py)
     df["Amount_log1p"] = np.log1p(df["Amount"])
     df["Amount_squared"] = df["Amount"] ** 2
     if "V14" in df.columns and "V17" in df.columns:
@@ -117,9 +131,7 @@ def predict(transaction: TransactionFeatures):
 def predict_batch(request: BatchPredictionRequest):
     if model is None:
         raise HTTPException(status_code=503, detail="Model not loaded.")
-
-    results = []
-    for txn in request.transactions:
-        result = predict(txn)
-        results.append(result)
-    return {"predictions": results, "count": len(results)}
+    return {
+        "predictions": [predict(txn) for txn in request.transactions],
+        "count": len(request.transactions),
+    }

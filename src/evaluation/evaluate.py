@@ -124,7 +124,7 @@ def main():
 
     # Save PR curve data for Streamlit
     pr_data = [{"precision": float(p), "recall": float(r)}
-               for p, r in zip(precision_arr, recall_arr)]
+               for p, r in zip(precision_arr, recall_arr, strict=False)]
     with open("reports/figures/pr_curve.json", "w") as f:
         json.dump(pr_data, f)
 
@@ -147,7 +147,7 @@ def main():
     fig.savefig("reports/figures/roc_curve.png", dpi=150, facecolor="#0e1117")
     plt.close(fig)
 
-    roc_data = [{"fpr": float(f), "tpr": float(t)} for f, t in zip(fpr, tpr)]
+    roc_data = [{"fpr": float(f), "tpr": float(t)} for f, t in zip(fpr, tpr, strict=False)]
     with open("reports/figures/roc_curve.json", "w") as f:
         json.dump(roc_data, f)
 
