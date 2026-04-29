@@ -1,7 +1,7 @@
 stages:
 
   prepare:
-    cmd: /Users/sami/Downloads/ksa-ml-pipeline/.venv/bin/python3 src/data/prepare.py
+    cmd: python src/data/prepare.py
     deps:
       - src/data/prepare.py
       - data/raw/creditcard.csv
@@ -11,7 +11,6 @@ stages:
       - data.test_size
       - data.stratify
       - features.drop_columns
-      - features.drop_columns
     outs:
       - data/processed/train.csv
       - data/processed/test.csv
@@ -20,7 +19,7 @@ stages:
           cache: false
 
   featurize:
-    cmd: /Users/sami/Downloads/ksa-ml-pipeline/.venv/bin/python3 src/features/featurize.py
+    cmd: python src/features/featurize.py
     deps:
       - src/features/featurize.py
       - data/processed/train.csv
@@ -37,7 +36,7 @@ stages:
       - models/scaler.joblib
 
   train:
-    cmd: /Users/sami/Downloads/ksa-ml-pipeline/.venv/bin/python3 src/models/train.py
+    cmd: python src/models/train.py
     deps:
       - src/models/train.py
       - data/processed/train_features.csv
@@ -53,7 +52,7 @@ stages:
           cache: false
 
   evaluate:
-    cmd: /Users/sami/Downloads/ksa-ml-pipeline/.venv/bin/python3 src/evaluation/evaluate.py
+    cmd: python src/evaluation/evaluate.py
     deps:
       - src/evaluation/evaluate.py
       - models/model.joblib
@@ -75,7 +74,7 @@ stages:
           cache: false
 
   drift_report:
-    cmd: /Users/sami/Downloads/ksa-ml-pipeline/.venv/bin/python3 src/evaluation/drift.py
+    cmd: python src/evaluation/drift.py
     deps:
       - src/evaluation/drift.py
       - data/processed/train_features.csv

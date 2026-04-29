@@ -24,20 +24,40 @@ app = FastAPI(
 
 MODEL_PATH = Path("models/model.joblib")
 SCALER_PATH = Path("models/scaler.joblib")
+METRICS_PATH = Path("reports/metrics.json")
+
+# Default fallback — overwritten at startup from evaluate.py output
+DEFAULT_THRESHOLD = 0.5
 
 model = None
 scaler = None
+optimal_threshold: float = DEFAULT_THRESHOLD
+
+
+def _load_threshold() -> float:
+    """Read the PR-curve-optimal threshold produced by evaluate.py."""
+    if METRICS_PATH.exists():
+        import json
+
+        with open(METRICS_PATH) as f:
+            metrics = json.load(f)
+        threshold = float(metrics.get("optimal_threshold", DEFAULT_THRESHOLD))
+        log.info("Loaded optimal threshold %.4f from %s", threshold, METRICS_PATH)
+        return threshold
+    log.warning("metrics.json not found — using default threshold %.2f", DEFAULT_THRESHOLD)
+    return DEFAULT_THRESHOLD
 
 
 @app.on_event("startup")
 def load_artefacts():
-    global model, scaler
+    global model, scaler, optimal_threshold
     if MODEL_PATH.exists():
         model = joblib.load(MODEL_PATH)
         log.info("Model loaded from %s", MODEL_PATH)
     if SCALER_PATH.exists():
         scaler = joblib.load(SCALER_PATH)
         log.info("Scaler loaded from %s", SCALER_PATH)
+    optimal_threshold = _load_threshold()
 
 
 class TransactionFeatures(BaseModel):
@@ -99,7 +119,7 @@ def predict(transaction: TransactionFeatures):
     if model is None:
         raise HTTPException(status_code=503, detail="Model not loaded. Run DVC pipeline first.")
 
-    threshold = 0.5
+    threshold = optimal_threshold
     df = pd.DataFrame([transaction.model_dump()])
 
     df["Amount_log1p"] = np.log1p(df["Amount"])
