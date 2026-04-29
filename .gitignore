@@ -17,6 +17,9 @@ data/processed/
 # ── Model artefacts (versioned by DVC) ───────────────────────────────────────
 models/
 !models/.gitkeep
+# Source code in src/models/ is NOT an artefact — exclude from above pattern
+!src/models/
+!src/models/**
 
 # ── MLflow local runs (when not using DagsHub) ───────────────────────────────
 mlruns/
