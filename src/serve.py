@@ -4,7 +4,9 @@ Run: uvicorn src.serve:app --reload --port 8000
 Docs: http://localhost:8000/docs
 """
 
+import json
 import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import joblib
@@ -16,17 +18,10 @@ from pydantic import BaseModel, Field
 log = logging.getLogger("serve")
 logging.basicConfig(level=logging.INFO)
 
-app = FastAPI(
-    title="Fraud Detection API",
-    description="End-to-end ML pipeline demo",
-    version="1.0.0",
-)
-
 MODEL_PATH = Path("models/model.joblib")
 SCALER_PATH = Path("models/scaler.joblib")
 METRICS_PATH = Path("reports/metrics.json")
 
-# Default fallback — overwritten at startup from evaluate.py output
 DEFAULT_THRESHOLD = 0.5
 
 model = None
@@ -37,8 +32,6 @@ optimal_threshold: float = DEFAULT_THRESHOLD
 def _load_threshold() -> float:
     """Read the PR-curve-optimal threshold produced by evaluate.py."""
     if METRICS_PATH.exists():
-        import json
-
         with open(METRICS_PATH) as f:
             metrics = json.load(f)
         threshold = float(metrics.get("optimal_threshold", DEFAULT_THRESHOLD))
@@ -48,8 +41,8 @@ def _load_threshold() -> float:
     return DEFAULT_THRESHOLD
 
 
-@app.on_event("startup")
-def load_artefacts():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     global model, scaler, optimal_threshold
     if MODEL_PATH.exists():
         model = joblib.load(MODEL_PATH)
@@ -58,6 +51,15 @@ def load_artefacts():
         scaler = joblib.load(SCALER_PATH)
         log.info("Scaler loaded from %s", SCALER_PATH)
     optimal_threshold = _load_threshold()
+    yield
+
+
+app = FastAPI(
+    title="Fraud Detection API",
+    description="End-to-end ML pipeline demo",
+    version="1.0.0",
+    lifespan=lifespan,
+)
 
 
 class TransactionFeatures(BaseModel):
